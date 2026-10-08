@@ -1,25 +1,27 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { asApiError } from '../../shell-contract';
 import { PropertyCardComponent } from '../components/property-card.component';
+import { SearchFormComponent } from '../components/search-form.component';
 import { CatalogApiService } from '../data/catalog-api.service';
 import { Page, PropiedadFilters, PropiedadSummary } from '../model/propiedad';
 
 /** Every view that loads data has four states, and all four are designed. */
 type View =
   | { state: 'loading' }
-  | { state: 'error'; message: string }
+  | { state: 'error'; message: string; retry: boolean }
   | { state: 'empty' }
   | { state: 'ready'; page: Page<PropiedadSummary> };
 
 /** Explore (/explorar): the result of the search, one page at a time. */
 @Component({
   selector: 'app-explore-page',
-  imports: [PropertyCardComponent],
+  imports: [PropertyCardComponent, SearchFormComponent],
   template: `
     <section aria-labelledby="explore-title">
       <h1 id="explore-title">Explorar propiedades</h1>
+      <app-search-form (search)="onSearch($event)" />
 
       @let v = view();
       @switch (v.state) {
@@ -33,11 +35,14 @@ type View =
         @case ('error') {
           <div class="notice" role="alert">
             <p>{{ v.message }}</p>
-            <button type="button" (click)="load()">Reintentar</button>
+            @if (v.retry) { <button type="button" (click)="load()">Reintentar</button> }
           </div>
         }
         @case ('empty') {
-          <div class="notice"><p>No encontramos propiedades para esta búsqueda</p></div>
+          <div class="notice">
+            <p>No encontramos propiedades para esta búsqueda</p>
+            @if (hasFilters()) { <button type="button" (click)="searchForm().clear()">Limpiar búsqueda</button> }
+          </div>
         }
         @case ('ready') {
           <ul class="grid">
@@ -88,6 +93,7 @@ export class ExplorePageComponent {
   private readonly api = inject(CatalogApiService);
   private readonly destroyRef = inject(DestroyRef);
   private request?: Subscription;
+  readonly searchForm = viewChild.required(SearchFormComponent);
 
   readonly filters = signal<PropiedadFilters>({});
   readonly page = signal(1);
@@ -104,8 +110,24 @@ export class ExplorePageComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (page) => this.view.set(page.data.length ? { state: 'ready', page } : { state: 'empty' }),
-        error: (err: unknown) => this.view.set({ state: 'error', message: asApiError(err).userMessage }),
+        error: (err: unknown) => {
+          const error = asApiError(err);
+          // A 400 whose errors belong to the form is fixed there, not retried.
+          const placed = error.status === 400 && this.searchForm().showServerErrors(error.details);
+          this.view.set({ state: 'error', message: error.userMessage, retry: !placed });
+        },
       });
+  }
+
+  /** A new search starts again from page 1. */
+  onSearch(filters: PropiedadFilters): void {
+    this.filters.set(filters);
+    this.page.set(1);
+    this.load();
+  }
+
+  hasFilters(): boolean {
+    return Object.keys(this.filters()).length > 0;
   }
 
   go(page: number): void {
