@@ -97,4 +97,60 @@ describe('ExplorePageComponent', () => {
     await fixture.whenStable();
     expect(calls[2].page).toBe(1);
   });
+
+  describe('with the search form', () => {
+    async function search(ciudad: string): Promise<void> {
+      const city = element().querySelector<HTMLInputElement>('#ciudad')!;
+      city.value = ciudad;
+      city.dispatchEvent(new Event('input'));
+      button('Buscar').click();
+      await fixture.whenStable();
+    }
+
+    it('shows the form above the list', () => {
+      expect(element().querySelector('app-search-form ~ ul.grid')).not.toBeNull();
+    });
+
+    it('searches from page 1 with the filled filters', async () => {
+      await answer(page(1, 2));
+      button('Siguiente').click();
+      await fixture.whenStable();
+      await answer(page(2, 2));
+      await search('Cartagena');
+      expect(calls[2]).toMatchObject({ filters: { ciudad: 'Cartagena' }, page: 1 });
+    });
+
+    it('discards the answer of an older search that arrives after the newer one', async () => {
+      await search('Cartagena');
+      await search('Cali');
+      calls[2].answer.next(page(1, 1, [card(9)]));
+      await fixture.whenStable();
+      calls[1].answer.next(page(1, 1, [card(1), card(2), card(3)]));
+      await fixture.whenStable();
+      const titles = Array.from(element().querySelectorAll('app-property-card h2')).map((h) => h.textContent?.trim());
+      expect(titles).toEqual(['Casa 9']);
+    });
+
+    it('puts each error of a 400 next to its field, without "Reintentar"', async () => {
+      await search('Cartagena');
+      await answer({
+        status: 400, code: 'VALIDATION_ERROR', message: 'the request has invalid fields', traceId: 'abc',
+        details: [{ field: 'ciudad', message: 'must not be empty' }],
+        userMessage: 'Algunos datos no son válidos. Revísalos e intenta de nuevo.',
+      }, false);
+      const describedBy = element().querySelector('#ciudad')!.getAttribute('aria-describedby');
+      expect(element().querySelector(`#${describedBy}`)?.textContent).toContain('Escribe el nombre de una ciudad');
+      expect(element().textContent).not.toContain('must not be empty');
+      expect(element().querySelector('[role="alert"] button')).toBeNull();
+    });
+
+    it('offers "Limpiar búsqueda" on the empty state, which lists everything again', async () => {
+      await search('Pasto');
+      await answer(page(1, 0, []));
+      button('Limpiar búsqueda').click();
+      await fixture.whenStable();
+      expect(calls[2]).toMatchObject({ filters: {}, page: 1 });
+      expect(element().querySelector<HTMLInputElement>('#ciudad')!.value).toBe('');
+    });
+  });
 });
