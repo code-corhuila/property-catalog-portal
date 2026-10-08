@@ -30,6 +30,18 @@ npm start       # http://localhost:4201/remoteEntry.json
 Inside the container: run `npm start` here and in `property-front`, sign in at `http://localhost:4200` and open
 `/explorar`. `deploy/` builds the image (`npm ci`, then nginx) as the service `catalog-portal` on `platform`.
 
+## See it with test data
+
+Until `property-api-gateway` and `property-catalog-api` exist, `dev/mock-api.mjs` (development
+only, Node with no dependencies, outside `src/`) answers `GET /api/v1/propiedades` and
+`GET /api/v1/propiedades/{id}` on port 8080, the gateway's, with 24 properties and the errors of the contract.
+
+```bash
+npm run mock                            # 1. test data, http://localhost:8080
+npm start                               # 2. this portal, http://localhost:4201
+cd ../property-front && npm start       # 3. the container, http://localhost:4200
+```
+
 ## Branching
 
 Three permanent branches. **None of them accepts a direct commit** — you enter through a child
