@@ -42,6 +42,19 @@ npm start                               # 2. this portal, http://localhost:4201
 cd ../property-front && npm start       # 3. the container, http://localhost:4200
 ```
 
+## Run with Docker
+
+Build the image on its own, from the root of this repository:
+
+```bash
+docker build -f deploy/Dockerfile -t property-catalog-portal:dev .
+```
+
+`.dockerignore` keeps `node_modules`, `dist`, `.angular` and `.git` out of the image: it
+installs its own dependencies with `npm ci`. `deploy/compose.yml` publishes no port and
+expects the external `platform` network, so to see this portal inside the container, with
+the mock API, use [`property-infra`](https://github.com/code-corhuila/property-infra).
+
 ## Branching
 
 Three permanent branches. **None of them accepts a direct commit** — you enter through a child
