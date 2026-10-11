@@ -1,0 +1,32 @@
+name: CI
+
+# Every Pull Request builds the repository and runs its tests on a clean machine.
+# "It works on my computer" is not evidence; a green check here is.
+# Course rule on Actions minutes: CI runs only on Pull Requests into develop and qa,
+# a newer run cancels the older one, and no job runs longer than 10 minutes.
+
+on:
+  pull_request:
+    branches: [develop, qa]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
